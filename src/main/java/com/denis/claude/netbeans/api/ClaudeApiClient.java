@@ -13,6 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 /**
  * Client pour Claude Code CLI.
@@ -226,7 +227,21 @@ public class ClaudeApiClient {
             throw new RuntimeException("Claude Code n'a retourné aucune réponse");
         }
 
-        return result;
+        // Supprimer les codes ANSI de couleur qui pourraient rester
+        return stripAnsiCodes(result);
+    }
+
+    /**
+     * Supprime les codes d'échappement ANSI du texte.
+     * Ces codes sont utilisés pour les couleurs dans le terminal.
+     */
+    private static final Pattern ANSI_PATTERN = Pattern.compile("\u001B\\[[;\\d]*m");
+
+    private String stripAnsiCodes(String text) {
+        if (text == null) {
+            return null;
+        }
+        return ANSI_PATTERN.matcher(text).replaceAll("");
     }
 
     public void clearHistory() {
