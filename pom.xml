@@ -6,7 +6,7 @@
 
     <groupId>com.denis.claude</groupId>
     <artifactId>claude-netbeans-plugin</artifactId>
-    <version>2.0.4</version>
+    <version>2.0.5</version>
     <packaging>nbm</packaging>
 
     <name>Claude AI Assistant for NetBeans</name>
@@ -107,6 +107,23 @@
         <dependency>
             <groupId>org.netbeans.api</groupId>
             <artifactId>org-netbeans-modules-settings</artifactId>
+            <version>${netbeans.version}</version>
+        </dependency>
+
+        <!-- Project API for getting active project directory -->
+        <dependency>
+            <groupId>org.netbeans.api</groupId>
+            <artifactId>org-netbeans-modules-projectapi</artifactId>
+            <version>${netbeans.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.netbeans.api</groupId>
+            <artifactId>org-netbeans-modules-projectuiapi</artifactId>
+            <version>${netbeans.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.netbeans.api</groupId>
+            <artifactId>org-netbeans-modules-projectuiapi-base</artifactId>
             <version>${netbeans.version}</version>
         </dependency>
 

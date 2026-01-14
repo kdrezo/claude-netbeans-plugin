@@ -1,6 +1,7 @@
 package com.denis.claude.netbeans.api;
 
 import com.denis.claude.netbeans.settings.ClaudeSettings;
+import com.denis.claude.netbeans.util.NetBeansProjectUtils;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -125,6 +126,12 @@ public class ClaudeApiClient {
 
         // Fusionner stderr dans stdout pour simplifier la lecture
         pb.redirectErrorStream(true);
+
+        // Définir le répertoire de travail sur le projet NetBeans actif
+        File projectDir = NetBeansProjectUtils.getActiveProjectDirectory();
+        if (projectDir != null && projectDir.exists() && projectDir.isDirectory()) {
+            pb.directory(projectDir);
+        }
 
         // Définir l'environnement nécessaire pour Claude Code
         String home = System.getProperty("user.home");
