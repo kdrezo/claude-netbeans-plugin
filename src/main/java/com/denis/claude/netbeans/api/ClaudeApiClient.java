@@ -3,6 +3,7 @@ package com.denis.claude.netbeans.api;
 import com.denis.claude.netbeans.settings.ClaudeSettings;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -136,6 +137,9 @@ public class ClaudeApiClient {
         command.add(prompt);
 
         ProcessBuilder pb = new ProcessBuilder(command);
+
+        // IMPORTANT: Rediriger stdin depuis /dev/null pour éviter que claude attende une entrée
+        pb.redirectInput(ProcessBuilder.Redirect.from(new File("/dev/null")));
 
         // Fusionner stderr dans stdout pour simplifier la lecture
         pb.redirectErrorStream(true);
