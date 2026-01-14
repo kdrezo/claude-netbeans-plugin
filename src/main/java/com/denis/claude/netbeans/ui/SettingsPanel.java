@@ -202,6 +202,11 @@ public final class SettingsPanel extends JPanel {
                             showTestResult(false, "Accès refusé",
                                     "Votre compte n'a pas accès à l'API.\n" +
                                     "Vérifiez votre abonnement sur console.anthropic.com");
+                        } else if (errorMsg.contains("400") && errorMsg.contains("credit")) {
+                            showTestResult(false, "Crédits insuffisants",
+                                    "Votre compte Anthropic n'a pas assez de crédits.\n\n" +
+                                    "Rendez-vous sur console.anthropic.com/settings/billing\n" +
+                                    "pour ajouter des crédits ou souscrire à un plan.");
                         } else if (errorMsg.contains("429")) {
                             showTestResult(false, "Limite de requêtes atteinte",
                                     "Trop de requêtes. Réessayez dans quelques instants.");
