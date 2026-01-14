@@ -1,22 +1,21 @@
 package com.denis.claude.netbeans.settings;
 
+import java.io.File;
 import java.util.prefs.Preferences;
 import org.openide.util.NbPreferences;
 
 /**
  * Gestion des paramètres du plugin Claude.
- * Stocke la clé API et autres préférences utilisateur.
+ * Stocke le chemin vers Claude Code CLI et autres préférences.
  */
 public class ClaudeSettings {
 
-    private static final String PREF_API_KEY = "apiKey";
-    private static final String PREF_MODEL = "model";
+    private static final String PREF_CLAUDE_PATH = "claudePath";
     private static final String PREF_MAX_TOKENS = "maxTokens";
-    private static final String PREF_TEMPERATURE = "temperature";
 
-    private static final String DEFAULT_MODEL = "claude-sonnet-4-20250514";
+    // Chemin par défaut sur macOS (installation via npm global ou homebrew)
+    private static final String DEFAULT_CLAUDE_PATH = "/usr/local/bin/claude";
     private static final int DEFAULT_MAX_TOKENS = 4096;
-    private static final double DEFAULT_TEMPERATURE = 0.7;
 
     private static ClaudeSettings instance;
     private final Preferences prefs;
@@ -32,20 +31,12 @@ public class ClaudeSettings {
         return instance;
     }
 
-    public String getApiKey() {
-        return prefs.get(PREF_API_KEY, "");
+    public String getClaudePath() {
+        return prefs.get(PREF_CLAUDE_PATH, detectClaudePath());
     }
 
-    public void setApiKey(String apiKey) {
-        prefs.put(PREF_API_KEY, apiKey);
-    }
-
-    public String getModel() {
-        return prefs.get(PREF_MODEL, DEFAULT_MODEL);
-    }
-
-    public void setModel(String model) {
-        prefs.put(PREF_MODEL, model);
+    public void setClaudePath(String claudePath) {
+        prefs.put(PREF_CLAUDE_PATH, claudePath);
     }
 
     public int getMaxTokens() {
@@ -56,16 +47,81 @@ public class ClaudeSettings {
         prefs.putInt(PREF_MAX_TOKENS, maxTokens);
     }
 
-    public double getTemperature() {
-        return prefs.getDouble(PREF_TEMPERATURE, DEFAULT_TEMPERATURE);
+    /**
+     * Détecte automatiquement le chemin de Claude Code CLI.
+     */
+    private String detectClaudePath() {
+        // Chemins possibles sur macOS
+        String[] possiblePaths = {
+            "/usr/local/bin/claude",
+            "/opt/homebrew/bin/claude",
+            System.getProperty("user.home") + "/.npm-global/bin/claude",
+            System.getProperty("user.home") + "/node_modules/.bin/claude",
+            "/usr/bin/claude"
+        };
+
+        for (String path : possiblePaths) {
+            File file = new File(path);
+            if (file.exists() && file.canExecute()) {
+                return path;
+            }
+        }
+
+        // Retourner le chemin par défaut même s'il n'existe pas
+        return DEFAULT_CLAUDE_PATH;
     }
 
-    public void setTemperature(double temperature) {
-        prefs.putDouble(PREF_TEMPERATURE, temperature);
-    }
-
+    /**
+     * Vérifie si Claude Code est configuré et accessible.
+     */
     public boolean isConfigured() {
-        String apiKey = getApiKey();
-        return apiKey != null && !apiKey.trim().isEmpty();
+        String claudePath = getClaudePath();
+        if (claudePath == null || claudePath.trim().isEmpty()) {
+            return false;
+        }
+        File file = new File(claudePath);
+        return file.exists() && file.canExecute();
+    }
+
+    /**
+     * Vérifie si le chemin donné est valide.
+     */
+    public static boolean isValidClaudePath(String path) {
+        if (path == null || path.trim().isEmpty()) {
+            return false;
+        }
+        File file = new File(path);
+        return file.exists() && file.canExecute();
+    }
+
+    // Méthodes de compatibilité (obsolètes, gardées pour la transition)
+    @Deprecated
+    public String getApiKey() {
+        return "";
+    }
+
+    @Deprecated
+    public void setApiKey(String apiKey) {
+        // Ignoré
+    }
+
+    @Deprecated
+    public String getModel() {
+        return "claude-code";
+    }
+
+    @Deprecated
+    public void setModel(String model) {
+        // Ignoré - Claude Code utilise le modèle configuré dans l'abonnement
+    }
+
+    @Deprecated
+    public double getTemperature() {
+        return 0.7;
+    }
+
+    @Deprecated
+    public void setTemperature(double temperature) {
+        // Ignoré
     }
 }

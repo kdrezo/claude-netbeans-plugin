@@ -5,7 +5,9 @@ import com.denis.claude.netbeans.settings.ClaudeSettings;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.filechooser.FileFilter;
 import java.awt.*;
+import java.io.File;
 
 /**
  * Panneau de configuration pour le plugin Claude.
@@ -13,22 +15,13 @@ import java.awt.*;
  */
 public final class SettingsPanel extends JPanel {
 
-    private final JPasswordField apiKeyField;
-    private final JButton showHideButton;
-    private final JComboBox<String> modelCombo;
+    private final JTextField claudePathField;
+    private final JButton browseButton;
+    private final JButton detectButton;
     private final JSpinner maxTokensSpinner;
-    private final JSpinner temperatureSpinner;
     private final JButton testButton;
     private final JLabel statusLabel;
-    private boolean apiKeyVisible = false;
-
-    private static final String[] MODELS = {
-            "claude-sonnet-4-20250514",
-            "claude-opus-4-20250514",
-            "claude-3-5-sonnet-20241022",
-            "claude-3-5-haiku-20241022",
-            "claude-3-opus-20240229"
-    };
+    private final JLabel pathStatusLabel;
 
     public SettingsPanel() {
         setLayout(new BorderLayout(10, 10));
@@ -40,83 +33,96 @@ public final class SettingsPanel extends JPanel {
         gbc.insets = new Insets(5, 5, 5, 5);
         gbc.anchor = GridBagConstraints.WEST;
 
-        // Clé API
+        // Titre explicatif
         gbc.gridx = 0;
         gbc.gridy = 0;
-        formPanel.add(new JLabel("Clé API Anthropic:"), gbc);
+        gbc.gridwidth = 2;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        JLabel titleLabel = new JLabel("<html><b>Configuration de Claude Code</b><br>" +
+                "<small>Ce plugin utilise Claude Code CLI avec votre abonnement Max.</small></html>");
+        formPanel.add(titleLabel, gbc);
+
+        // Espace
+        gbc.gridy = 1;
+        formPanel.add(Box.createVerticalStrut(10), gbc);
+
+        // Chemin Claude Code
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        gbc.gridwidth = 1;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.weightx = 0;
+        formPanel.add(new JLabel("Chemin Claude Code:"), gbc);
 
         gbc.gridx = 1;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.weightx = 1.0;
-        apiKeyField = new JPasswordField(35);
 
-        // Panel pour le champ API key + bouton afficher/masquer
-        JPanel apiKeyPanel = new JPanel(new BorderLayout(5, 0));
-        apiKeyPanel.add(apiKeyField, BorderLayout.CENTER);
+        // Panel pour le champ chemin + boutons
+        JPanel pathPanel = new JPanel(new BorderLayout(5, 0));
+        claudePathField = new JTextField(30);
+        pathPanel.add(claudePathField, BorderLayout.CENTER);
 
-        showHideButton = new JButton("Afficher");
-        showHideButton.setPreferredSize(new Dimension(85, showHideButton.getPreferredSize().height));
-        showHideButton.addActionListener(e -> toggleApiKeyVisibility());
-        apiKeyPanel.add(showHideButton, BorderLayout.EAST);
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        browseButton = new JButton("Parcourir...");
+        browseButton.addActionListener(e -> browseForClaude());
+        buttonPanel.add(browseButton);
 
-        formPanel.add(apiKeyPanel, gbc);
+        detectButton = new JButton("Détecter");
+        detectButton.addActionListener(e -> detectClaude());
+        buttonPanel.add(detectButton);
 
-        // Modèle
-        gbc.gridx = 0;
-        gbc.gridy = 1;
-        gbc.fill = GridBagConstraints.NONE;
-        gbc.weightx = 0;
-        formPanel.add(new JLabel("Modèle:"), gbc);
+        pathPanel.add(buttonPanel, BorderLayout.EAST);
+        formPanel.add(pathPanel, gbc);
 
+        // Statut du chemin
         gbc.gridx = 1;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        modelCombo = new JComboBox<>(MODELS);
-        formPanel.add(modelCombo, gbc);
+        gbc.gridy = 3;
+        pathStatusLabel = new JLabel(" ");
+        pathStatusLabel.setFont(pathStatusLabel.getFont().deriveFont(Font.ITALIC, 11f));
+        formPanel.add(pathStatusLabel, gbc);
 
         // Max tokens
         gbc.gridx = 0;
-        gbc.gridy = 2;
+        gbc.gridy = 4;
         gbc.fill = GridBagConstraints.NONE;
+        gbc.weightx = 0;
         formPanel.add(new JLabel("Tokens maximum:"), gbc);
 
         gbc.gridx = 1;
         maxTokensSpinner = new JSpinner(new SpinnerNumberModel(4096, 100, 200000, 100));
         formPanel.add(maxTokensSpinner, gbc);
 
-        // Température
+        // Espace
         gbc.gridx = 0;
-        gbc.gridy = 3;
-        formPanel.add(new JLabel("Température (0.0-1.0):"), gbc);
-
-        gbc.gridx = 1;
-        temperatureSpinner = new JSpinner(new SpinnerNumberModel(0.7, 0.0, 1.0, 0.1));
-        formPanel.add(temperatureSpinner, gbc);
+        gbc.gridy = 5;
+        gbc.gridwidth = 2;
+        formPanel.add(Box.createVerticalStrut(15), gbc);
 
         // Bouton de test et statut
-        gbc.gridx = 0;
-        gbc.gridy = 4;
-        gbc.gridwidth = 2;
+        gbc.gridy = 6;
         gbc.fill = GridBagConstraints.NONE;
         gbc.anchor = GridBagConstraints.CENTER;
 
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
+        JPanel testPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
         testButton = new JButton("Tester la connexion");
         testButton.addActionListener(e -> testConnection());
-        buttonPanel.add(testButton);
+        testPanel.add(testButton);
 
-        formPanel.add(buttonPanel, gbc);
+        formPanel.add(testPanel, gbc);
 
         // Label de statut sur une ligne séparée
-        gbc.gridy = 5;
+        gbc.gridy = 7;
         gbc.anchor = GridBagConstraints.CENTER;
         statusLabel = new JLabel(" ");
         statusLabel.setFont(statusLabel.getFont().deriveFont(Font.BOLD));
         formPanel.add(statusLabel, gbc);
 
         // Note d'information
-        gbc.gridy = 6;
+        gbc.gridy = 8;
         gbc.anchor = GridBagConstraints.WEST;
-        JLabel noteLabel = new JLabel("<html><i>Obtenez votre clé API sur console.anthropic.com</i></html>");
+        JLabel noteLabel = new JLabel("<html><i>Claude Code doit être installé et connecté à votre compte Anthropic.<br>" +
+                "Installation: npm install -g @anthropic-ai/claude-code</i></html>");
         noteLabel.setForeground(Color.GRAY);
         formPanel.add(noteLabel, gbc);
 
@@ -124,35 +130,131 @@ public final class SettingsPanel extends JPanel {
 
         // Charger les valeurs actuelles
         load();
+
+        // Vérifier le chemin à l'initialisation
+        updatePathStatus();
+
+        // Listener pour mettre à jour le statut quand le chemin change
+        claudePathField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { updatePathStatus(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { updatePathStatus(); }
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { updatePathStatus(); }
+        });
     }
 
-    private void toggleApiKeyVisibility() {
-        apiKeyVisible = !apiKeyVisible;
-        if (apiKeyVisible) {
-            apiKeyField.setEchoChar((char) 0); // Afficher en clair
-            showHideButton.setText("Masquer");
+    private void browseForClaude() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Sélectionner l'exécutable Claude Code");
+        chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+
+        // Commencer dans /usr/local/bin ou le dossier actuel du chemin
+        String currentPath = claudePathField.getText();
+        if (!currentPath.isEmpty()) {
+            File current = new File(currentPath);
+            if (current.getParentFile() != null && current.getParentFile().exists()) {
+                chooser.setCurrentDirectory(current.getParentFile());
+            }
         } else {
-            apiKeyField.setEchoChar('*'); // Masquer
-            showHideButton.setText("Afficher");
+            chooser.setCurrentDirectory(new File("/usr/local/bin"));
+        }
+
+        chooser.setFileFilter(new FileFilter() {
+            @Override
+            public boolean accept(File f) {
+                return f.isDirectory() || f.getName().equals("claude") || f.getName().startsWith("claude");
+            }
+
+            @Override
+            public String getDescription() {
+                return "Claude Code CLI (claude)";
+            }
+        });
+
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            claudePathField.setText(chooser.getSelectedFile().getAbsolutePath());
+        }
+    }
+
+    private void detectClaude() {
+        // Chemins possibles
+        String[] possiblePaths = {
+            "/usr/local/bin/claude",
+            "/opt/homebrew/bin/claude",
+            System.getProperty("user.home") + "/.npm-global/bin/claude",
+            System.getProperty("user.home") + "/node_modules/.bin/claude",
+            "/usr/bin/claude"
+        };
+
+        for (String path : possiblePaths) {
+            File file = new File(path);
+            if (file.exists() && file.canExecute()) {
+                claudePathField.setText(path);
+                JOptionPane.showMessageDialog(this,
+                        "Claude Code détecté:\n" + path,
+                        "Détection réussie",
+                        JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+        }
+
+        // Essayer avec 'which claude'
+        try {
+            ProcessBuilder pb = new ProcessBuilder("which", "claude");
+            Process process = pb.start();
+            java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream()));
+            String line = reader.readLine();
+            process.waitFor();
+            if (line != null && !line.isEmpty()) {
+                File file = new File(line.trim());
+                if (file.exists() && file.canExecute()) {
+                    claudePathField.setText(line.trim());
+                    JOptionPane.showMessageDialog(this,
+                            "Claude Code détecté:\n" + line.trim(),
+                            "Détection réussie",
+                            JOptionPane.INFORMATION_MESSAGE);
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            // Ignorer
+        }
+
+        JOptionPane.showMessageDialog(this,
+                "Claude Code n'a pas été trouvé sur ce système.\n\n" +
+                "Installez-le avec:\n" +
+                "npm install -g @anthropic-ai/claude-code\n\n" +
+                "Puis lancez 'claude' dans un terminal pour vous connecter.",
+                "Claude Code non trouvé",
+                JOptionPane.WARNING_MESSAGE);
+    }
+
+    private void updatePathStatus() {
+        String path = claudePathField.getText().trim();
+        if (path.isEmpty()) {
+            pathStatusLabel.setText("Aucun chemin spécifié");
+            pathStatusLabel.setForeground(Color.ORANGE.darker());
+        } else if (ClaudeSettings.isValidClaudePath(path)) {
+            pathStatusLabel.setText("Chemin valide");
+            pathStatusLabel.setForeground(new Color(0, 150, 0));
+        } else {
+            pathStatusLabel.setText("Fichier non trouvé ou non exécutable");
+            pathStatusLabel.setForeground(new Color(200, 0, 0));
         }
     }
 
     public void load() {
         ClaudeSettings settings = ClaudeSettings.getInstance();
-        apiKeyField.setText(settings.getApiKey());
-        modelCombo.setSelectedItem(settings.getModel());
+        claudePathField.setText(settings.getClaudePath());
         maxTokensSpinner.setValue(settings.getMaxTokens());
-        temperatureSpinner.setValue(settings.getTemperature());
     }
 
     public void store() {
         ClaudeSettings settings = ClaudeSettings.getInstance();
-        settings.setApiKey(new String(apiKeyField.getPassword()));
-        settings.setModel((String) modelCombo.getSelectedItem());
+        settings.setClaudePath(claudePathField.getText().trim());
         settings.setMaxTokens((Integer) maxTokensSpinner.getValue());
-        settings.setTemperature((Double) temperatureSpinner.getValue());
 
-        // Réinitialiser le client avec les nouveaux paramètres
+        // Réinitialiser le client
         ClaudeApiClient.getInstance().reinitialize();
     }
 
@@ -164,16 +266,18 @@ public final class SettingsPanel extends JPanel {
         // Sauvegarder d'abord
         store();
 
-        String apiKey = new String(apiKeyField.getPassword()).trim();
+        String claudePath = claudePathField.getText().trim();
 
-        if (apiKey.isEmpty()) {
-            showTestResult(false, "Veuillez entrer une clé API", null);
+        if (claudePath.isEmpty()) {
+            showTestResult(false, "Chemin non configuré",
+                    "Veuillez spécifier le chemin vers Claude Code.");
             return;
         }
 
-        if (!apiKey.startsWith("sk-ant-")) {
-            showTestResult(false, "Format de clé API invalide",
-                    "La clé API doit commencer par 'sk-ant-'");
+        if (!ClaudeSettings.isValidClaudePath(claudePath)) {
+            showTestResult(false, "Chemin invalide",
+                    "Le fichier spécifié n'existe pas ou n'est pas exécutable.\n\n" +
+                    "Chemin: " + claudePath);
             return;
         }
 
@@ -186,34 +290,28 @@ public final class SettingsPanel extends JPanel {
                 .thenAccept(response -> {
                     SwingUtilities.invokeLater(() -> {
                         showTestResult(true, "Connexion réussie!",
-                                "La connexion à l'API Claude fonctionne correctement.\n\n" +
-                                "Modèle utilisé: " + modelCombo.getSelectedItem());
+                                "Claude Code fonctionne correctement.\n\n" +
+                                "Réponse: " + (response.length() > 100 ? response.substring(0, 100) + "..." : response));
                         testButton.setEnabled(true);
                     });
                 })
                 .exceptionally(ex -> {
                     SwingUtilities.invokeLater(() -> {
                         String errorMsg = ex.getMessage();
-                        if (errorMsg.contains("401")) {
-                            showTestResult(false, "Clé API invalide",
-                                    "La clé API n'est pas reconnue par Anthropic.\n" +
-                                    "Vérifiez que vous avez copié la clé correctement.");
-                        } else if (errorMsg.contains("403")) {
-                            showTestResult(false, "Accès refusé",
-                                    "Votre compte n'a pas accès à l'API.\n" +
-                                    "Vérifiez votre abonnement sur console.anthropic.com");
-                        } else if (errorMsg.contains("400") && errorMsg.contains("credit")) {
-                            showTestResult(false, "Crédits insuffisants",
-                                    "Votre compte Anthropic n'a pas assez de crédits.\n\n" +
-                                    "Rendez-vous sur console.anthropic.com/settings/billing\n" +
-                                    "pour ajouter des crédits ou souscrire à un plan.");
-                        } else if (errorMsg.contains("429")) {
-                            showTestResult(false, "Limite de requêtes atteinte",
-                                    "Trop de requêtes. Réessayez dans quelques instants.");
-                        } else if (errorMsg.contains("UnknownHostException") || errorMsg.contains("connexion")) {
-                            showTestResult(false, "Erreur de connexion",
-                                    "Impossible de contacter l'API Anthropic.\n" +
-                                    "Vérifiez votre connexion internet.");
+                        if (errorMsg.contains("code 1") || errorMsg.contains("not logged in") || errorMsg.contains("login")) {
+                            showTestResult(false, "Non connecté",
+                                    "Claude Code n'est pas connecté à votre compte.\n\n" +
+                                    "Ouvrez un terminal et exécutez:\n" +
+                                    "claude\n\n" +
+                                    "Puis suivez les instructions pour vous connecter.");
+                        } else if (errorMsg.contains("No such file") || errorMsg.contains("not found")) {
+                            showTestResult(false, "Exécutable non trouvé",
+                                    "Le fichier Claude Code n'existe pas à ce chemin.\n\n" +
+                                    "Utilisez le bouton 'Détecter' ou 'Parcourir' pour trouver claude.");
+                        } else if (errorMsg.contains("Permission denied")) {
+                            showTestResult(false, "Permission refusée",
+                                    "Le fichier n'est pas exécutable.\n\n" +
+                                    "Exécutez: chmod +x " + claudePath);
                         } else {
                             showTestResult(false, "Erreur", errorMsg);
                         }
@@ -225,7 +323,7 @@ public final class SettingsPanel extends JPanel {
 
     private void showTestResult(boolean success, String shortMessage, String detailMessage) {
         if (success) {
-            statusLabel.setText("✓ " + shortMessage);
+            statusLabel.setText("OK " + shortMessage);
             statusLabel.setForeground(new Color(0, 150, 0));
             if (detailMessage != null) {
                 JOptionPane.showMessageDialog(this,
@@ -234,7 +332,7 @@ public final class SettingsPanel extends JPanel {
                         JOptionPane.INFORMATION_MESSAGE);
             }
         } else {
-            statusLabel.setText("✗ " + shortMessage);
+            statusLabel.setText("Erreur: " + shortMessage);
             statusLabel.setForeground(new Color(200, 0, 0));
             if (detailMessage != null) {
                 JOptionPane.showMessageDialog(this,

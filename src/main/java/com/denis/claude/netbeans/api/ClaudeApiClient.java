@@ -4,26 +4,20 @@ import com.denis.claude.netbeans.settings.ClaudeSettings;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
- * Client pour l'API Claude d'Anthropic.
- * Utilise java.net.HttpURLConnection pour éviter les dépendances externes.
+ * Client pour Claude Code CLI.
+ * Utilise le processus claude en sous-processus pour exploiter l'abonnement Max.
  */
 public class ClaudeApiClient {
-
-    private static final String API_URL = "https://api.anthropic.com/v1/messages";
-    private static final String API_VERSION = "2023-06-01";
 
     private static ClaudeApiClient instance;
     private final ExecutorService executor;
@@ -42,7 +36,7 @@ public class ClaudeApiClient {
     }
 
     public void reinitialize() {
-        // Rien à réinitialiser avec l'implémentation HTTP native
+        // Rien à réinitialiser
     }
 
     public boolean isReady() {
@@ -56,23 +50,38 @@ public class ClaudeApiClient {
     public CompletableFuture<String> sendMessage(String userMessage, String systemPrompt) {
         return CompletableFuture.supplyAsync(() -> {
             if (!isReady()) {
-                throw new IllegalStateException("Client non configuré. Veuillez définir votre clé API.");
+                throw new IllegalStateException("Claude Code non configuré. Vérifiez le chemin dans les paramètres.");
             }
 
-            // Ajouter le message utilisateur à l'historique
-            conversationHistory.add(new Message("user", userMessage));
+            // Construire le prompt avec l'historique pour simuler une conversation
+            StringBuilder fullPrompt = new StringBuilder();
+
+            if (systemPrompt != null && !systemPrompt.trim().isEmpty()) {
+                fullPrompt.append("[Instructions système: ").append(systemPrompt).append("]\n\n");
+            }
+
+            // Ajouter l'historique de conversation
+            for (Message msg : conversationHistory) {
+                if ("user".equals(msg.role)) {
+                    fullPrompt.append("Utilisateur: ").append(msg.content).append("\n\n");
+                } else {
+                    fullPrompt.append("Assistant: ").append(msg.content).append("\n\n");
+                }
+            }
+
+            // Ajouter le nouveau message
+            fullPrompt.append("Utilisateur: ").append(userMessage);
 
             try {
-                String response = callApi(conversationHistory, systemPrompt);
+                String response = callClaude(fullPrompt.toString());
 
-                // Ajouter la réponse à l'historique
+                // Ajouter à l'historique
+                conversationHistory.add(new Message("user", userMessage));
                 conversationHistory.add(new Message("assistant", response));
 
                 return response;
             } catch (Exception e) {
-                // Retirer le message de l'historique en cas d'erreur
-                conversationHistory.remove(conversationHistory.size() - 1);
-                throw new RuntimeException("Erreur API: " + e.getMessage(), e);
+                throw new RuntimeException("Erreur Claude Code: " + e.getMessage(), e);
             }
         }, executor);
     }
@@ -96,121 +105,81 @@ public class ClaudeApiClient {
     public CompletableFuture<String> sendMessageWithoutHistory(String userMessage, String systemPrompt) {
         return CompletableFuture.supplyAsync(() -> {
             if (!isReady()) {
-                throw new IllegalStateException("Client non configuré. Veuillez définir votre clé API.");
+                throw new IllegalStateException("Claude Code non configuré. Vérifiez le chemin dans les paramètres.");
             }
 
-            List<Message> messages = new ArrayList<>();
-            messages.add(new Message("user", userMessage));
+            StringBuilder fullPrompt = new StringBuilder();
+            if (systemPrompt != null && !systemPrompt.trim().isEmpty()) {
+                fullPrompt.append("[Instructions: ").append(systemPrompt).append("]\n\n");
+            }
+            fullPrompt.append(userMessage);
 
             try {
-                return callApi(messages, systemPrompt);
+                return callClaude(fullPrompt.toString());
             } catch (Exception e) {
-                throw new RuntimeException("Erreur API: " + e.getMessage(), e);
+                throw new RuntimeException("Erreur Claude Code: " + e.getMessage(), e);
             }
         }, executor);
     }
 
-    private String callApi(List<Message> messages, String systemPrompt) throws Exception {
+    private String callClaude(String prompt) throws Exception {
         ClaudeSettings settings = ClaudeSettings.getInstance();
+        String claudePath = settings.getClaudePath();
 
-        URL url = new URL(API_URL);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod("POST");
-        conn.setRequestProperty("Content-Type", "application/json");
-        conn.setRequestProperty("x-api-key", settings.getApiKey());
-        conn.setRequestProperty("anthropic-version", API_VERSION);
-        conn.setDoOutput(true);
-        conn.setConnectTimeout(30000);
-        conn.setReadTimeout(120000);
+        // Construire la commande
+        List<String> command = new ArrayList<>();
+        command.add(claudePath);
+        command.add("-p");  // Mode prompt unique (non-interactif)
+        command.add(prompt);
 
-        // Construire le JSON de la requête
-        String requestBody = buildRequestJson(messages, systemPrompt, settings);
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(false);
 
-        try (OutputStream os = conn.getOutputStream()) {
-            byte[] input = requestBody.getBytes(StandardCharsets.UTF_8);
-            os.write(input, 0, input.length);
+        // Définir l'environnement pour éviter les problèmes de terminal
+        pb.environment().put("TERM", "dumb");
+        pb.environment().put("NO_COLOR", "1");
+
+        Process process = pb.start();
+
+        // Lire la sortie standard
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (output.length() > 0) {
+                    output.append("\n");
+                }
+                output.append(line);
+            }
         }
 
-        int responseCode = conn.getResponseCode();
-        if (responseCode != 200) {
-            BufferedReader errorReader = new BufferedReader(
-                    new InputStreamReader(conn.getErrorStream(), StandardCharsets.UTF_8));
-            StringBuilder errorResponse = new StringBuilder();
+        // Lire les erreurs
+        StringBuilder errorOutput = new StringBuilder();
+        try (BufferedReader errorReader = new BufferedReader(
+                new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = errorReader.readLine()) != null) {
-                errorResponse.append(line);
+                if (errorOutput.length() > 0) {
+                    errorOutput.append("\n");
+                }
+                errorOutput.append(line);
             }
-            errorReader.close();
-            throw new RuntimeException("Erreur HTTP " + responseCode + ": " + errorResponse.toString());
         }
 
-        BufferedReader reader = new BufferedReader(
-                new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
-        StringBuilder response = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            response.append(line);
-        }
-        reader.close();
+        int exitCode = process.waitFor();
 
-        return extractTextFromResponse(response.toString());
-    }
-
-    private String buildRequestJson(List<Message> messages, String systemPrompt, ClaudeSettings settings) {
-        StringBuilder json = new StringBuilder();
-        json.append("{");
-        json.append("\"model\":\"").append(escapeJson(settings.getModel())).append("\",");
-        json.append("\"max_tokens\":").append(settings.getMaxTokens()).append(",");
-
-        if (systemPrompt != null && !systemPrompt.trim().isEmpty()) {
-            json.append("\"system\":\"").append(escapeJson(systemPrompt)).append("\",");
+        if (exitCode != 0) {
+            String error = errorOutput.length() > 0 ? errorOutput.toString() : output.toString();
+            throw new RuntimeException("Claude Code a retourné une erreur (code " + exitCode + "): " + error);
         }
 
-        json.append("\"messages\":[");
-        for (int i = 0; i < messages.size(); i++) {
-            Message msg = messages.get(i);
-            if (i > 0) {
-                json.append(",");
-            }
-            json.append("{\"role\":\"").append(msg.role).append("\",");
-            json.append("\"content\":\"").append(escapeJson(msg.content)).append("\"}");
-        }
-        json.append("]");
-        json.append("}");
-
-        return json.toString();
-    }
-
-    private String escapeJson(String text) {
-        if (text == null) {
-            return "";
-        }
-        return text.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
-    }
-
-    private String extractTextFromResponse(String jsonResponse) {
-        // Extraction simple du texte de la réponse JSON
-        // Format attendu: {"content":[{"type":"text","text":"..."}],...}
-        Pattern pattern = Pattern.compile("\"text\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
-        Matcher matcher = pattern.matcher(jsonResponse);
-
-        StringBuilder result = new StringBuilder();
-        while (matcher.find()) {
-            String text = matcher.group(1);
-            // Déséchapper le JSON
-            text = text.replace("\\n", "\n")
-                    .replace("\\r", "\r")
-                    .replace("\\t", "\t")
-                    .replace("\\\"", "\"")
-                    .replace("\\\\", "\\");
-            result.append(text);
+        String result = output.toString().trim();
+        if (result.isEmpty() && errorOutput.length() > 0) {
+            throw new RuntimeException("Claude Code erreur: " + errorOutput.toString());
         }
 
-        return result.toString();
+        return result;
     }
 
     public void clearHistory() {
