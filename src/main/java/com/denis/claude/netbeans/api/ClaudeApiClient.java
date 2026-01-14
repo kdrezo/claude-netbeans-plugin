@@ -51,6 +51,9 @@ public class ClaudeApiClient {
     }
 
     public CompletableFuture<String> sendMessage(String userMessage, String systemPrompt) {
+        // IMPORTANT: Récupérer le répertoire projet depuis le thread EDT AVANT l'async
+        final File projectDir = getProjectDirectorySafe();
+
         return CompletableFuture.supplyAsync(() -> {
             if (!isReady()) {
                 throw new IllegalStateException("Claude Code non configuré. Vérifiez le chemin dans les paramètres.");
@@ -58,7 +61,7 @@ public class ClaudeApiClient {
 
             try {
                 // Envoyer directement le message (Claude Code gère sa propre session)
-                String response = callClaude(userMessage);
+                String response = callClaude(userMessage, projectDir);
 
                 // Ajouter à l'historique local pour référence
                 conversationHistory.add(new Message("user", userMessage));
@@ -69,6 +72,23 @@ public class ClaudeApiClient {
                 throw new RuntimeException("Erreur Claude Code: " + e.getMessage(), e);
             }
         }, executor);
+    }
+
+    /**
+     * Récupère le répertoire du projet de manière thread-safe.
+     */
+    private File getProjectDirectorySafe() {
+        try {
+            if (javax.swing.SwingUtilities.isEventDispatchThread()) {
+                return NetBeansProjectUtils.getActiveProjectDirectory();
+            } else {
+                // Si on n'est pas sur l'EDT, utiliser le home comme fallback
+                // (évite les deadlocks)
+                return new File(System.getProperty("user.home"));
+            }
+        } catch (Exception e) {
+            return new File(System.getProperty("user.home"));
+        }
     }
 
     public CompletableFuture<String> analyzeCode(String code, String language, String instruction) {
@@ -88,6 +108,9 @@ public class ClaudeApiClient {
     }
 
     public CompletableFuture<String> sendMessageWithoutHistory(String userMessage, String systemPrompt) {
+        // IMPORTANT: Récupérer le répertoire projet depuis le thread EDT AVANT l'async
+        final File projectDir = getProjectDirectorySafe();
+
         return CompletableFuture.supplyAsync(() -> {
             if (!isReady()) {
                 throw new IllegalStateException("Claude Code non configuré. Vérifiez le chemin dans les paramètres.");
@@ -100,14 +123,14 @@ public class ClaudeApiClient {
             fullPrompt.append(userMessage);
 
             try {
-                return callClaude(fullPrompt.toString());
+                return callClaude(fullPrompt.toString(), projectDir);
             } catch (Exception e) {
                 throw new RuntimeException("Erreur Claude Code: " + e.getMessage(), e);
             }
         }, executor);
     }
 
-    private String callClaude(String prompt) throws Exception {
+    private String callClaude(String prompt, File workingDir) throws Exception {
         ClaudeSettings settings = ClaudeSettings.getInstance();
         String claudePath = settings.getClaudePath();
 
@@ -127,10 +150,9 @@ public class ClaudeApiClient {
         // Fusionner stderr dans stdout pour simplifier la lecture
         pb.redirectErrorStream(true);
 
-        // Définir le répertoire de travail sur le projet NetBeans actif
-        File projectDir = NetBeansProjectUtils.getActiveProjectDirectory();
-        if (projectDir != null && projectDir.exists() && projectDir.isDirectory()) {
-            pb.directory(projectDir);
+        // Définir le répertoire de travail
+        if (workingDir != null && workingDir.exists() && workingDir.isDirectory()) {
+            pb.directory(workingDir);
         }
 
         // Définir l'environnement nécessaire pour Claude Code
