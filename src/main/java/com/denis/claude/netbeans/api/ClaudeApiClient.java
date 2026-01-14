@@ -4,20 +4,21 @@ import com.denis.claude.netbeans.settings.ClaudeSettings;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Client pour Claude Code CLI.
  * Utilise le processus claude en sous-processus pour exploiter l'abonnement Max.
  */
 public class ClaudeApiClient {
+
+    private static final int TIMEOUT_SECONDS = 120;
 
     private static ClaudeApiClient instance;
     private final ExecutorService executor;
@@ -130,53 +131,75 @@ public class ClaudeApiClient {
         List<String> command = new ArrayList<>();
         command.add(claudePath);
         command.add("-p");  // Mode prompt unique (non-interactif)
+        command.add("--output-format");
+        command.add("text");  // Format texte simple
         command.add(prompt);
 
         ProcessBuilder pb = new ProcessBuilder(command);
-        pb.redirectErrorStream(false);
+
+        // Fusionner stderr dans stdout pour simplifier la lecture
+        pb.redirectErrorStream(true);
 
         // Définir l'environnement pour éviter les problèmes de terminal
         pb.environment().put("TERM", "dumb");
         pb.environment().put("NO_COLOR", "1");
+        pb.environment().put("FORCE_COLOR", "0");
+
+        // Hériter du PATH pour trouver les dépendances
+        String path = System.getenv("PATH");
+        if (path != null) {
+            pb.environment().put("PATH", path);
+        }
 
         Process process = pb.start();
 
-        // Lire la sortie standard
+        // Lire la sortie dans un thread séparé pour éviter les deadlocks
         StringBuilder output = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (output.length() > 0) {
-                    output.append("\n");
+        Thread readerThread = new Thread(() -> {
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (output.length() > 0) {
+                        output.append("\n");
+                    }
+                    output.append(line);
                 }
-                output.append(line);
+            } catch (Exception e) {
+                output.append("\n[Erreur de lecture: ").append(e.getMessage()).append("]");
             }
+        });
+        readerThread.start();
+
+        // Attendre avec timeout
+        boolean finished = process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        if (!finished) {
+            process.destroyForcibly();
+            throw new RuntimeException("Timeout: Claude Code n'a pas répondu en " + TIMEOUT_SECONDS + " secondes");
         }
 
-        // Lire les erreurs
-        StringBuilder errorOutput = new StringBuilder();
-        try (BufferedReader errorReader = new BufferedReader(
-                new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = errorReader.readLine()) != null) {
-                if (errorOutput.length() > 0) {
-                    errorOutput.append("\n");
-                }
-                errorOutput.append(line);
-            }
-        }
+        // Attendre que le thread de lecture se termine
+        readerThread.join(5000);
 
-        int exitCode = process.waitFor();
+        int exitCode = process.exitValue();
+        String result = output.toString().trim();
 
         if (exitCode != 0) {
-            String error = errorOutput.length() > 0 ? errorOutput.toString() : output.toString();
-            throw new RuntimeException("Claude Code a retourné une erreur (code " + exitCode + "): " + error);
+            if (result.isEmpty()) {
+                throw new RuntimeException("Claude Code a échoué avec le code " + exitCode);
+            }
+            // Si on a une sortie, c'est peut-être un message d'erreur utile
+            if (result.toLowerCase().contains("not logged in") ||
+                result.toLowerCase().contains("authentication") ||
+                result.toLowerCase().contains("login")) {
+                throw new RuntimeException("Non connecté: Exécutez 'claude' dans un terminal pour vous authentifier");
+            }
+            throw new RuntimeException("Erreur (code " + exitCode + "): " + result);
         }
 
-        String result = output.toString().trim();
-        if (result.isEmpty() && errorOutput.length() > 0) {
-            throw new RuntimeException("Claude Code erreur: " + errorOutput.toString());
+        if (result.isEmpty()) {
+            throw new RuntimeException("Claude Code n'a retourné aucune réponse");
         }
 
         return result;

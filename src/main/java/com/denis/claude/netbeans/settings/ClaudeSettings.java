@@ -53,6 +53,8 @@ public class ClaudeSettings {
     private String detectClaudePath() {
         // Chemins possibles sur macOS
         String[] possiblePaths = {
+            System.getProperty("user.home") + "/.local/bin/claude",  // Installation standard
+            System.getProperty("user.home") + "/.claude/local/claude",
             "/usr/local/bin/claude",
             "/opt/homebrew/bin/claude",
             System.getProperty("user.home") + "/.npm-global/bin/claude",

@@ -178,6 +178,8 @@ public final class SettingsPanel extends JPanel {
     private void detectClaude() {
         // Chemins possibles
         String[] possiblePaths = {
+            System.getProperty("user.home") + "/.local/bin/claude",  // Installation standard
+            System.getProperty("user.home") + "/.claude/local/claude",
             "/usr/local/bin/claude",
             "/opt/homebrew/bin/claude",
             System.getProperty("user.home") + "/.npm-global/bin/claude",
