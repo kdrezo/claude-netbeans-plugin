@@ -140,15 +140,24 @@ public class ClaudeApiClient {
         // Fusionner stderr dans stdout pour simplifier la lecture
         pb.redirectErrorStream(true);
 
-        // Définir l'environnement pour éviter les problèmes de terminal
+        // Définir l'environnement nécessaire pour Claude Code
+        String home = System.getProperty("user.home");
+        pb.environment().put("HOME", home);
+        pb.environment().put("USER", System.getProperty("user.name"));
+        pb.environment().put("XDG_CONFIG_HOME", home + "/.config");
+
+        // Éviter les problèmes de terminal/couleurs
         pb.environment().put("TERM", "dumb");
         pb.environment().put("NO_COLOR", "1");
         pb.environment().put("FORCE_COLOR", "0");
 
-        // Hériter du PATH pour trouver les dépendances
+        // Hériter du PATH pour trouver les dépendances (node, etc.)
         String path = System.getenv("PATH");
         if (path != null) {
             pb.environment().put("PATH", path);
+        } else {
+            // PATH minimal si non disponible
+            pb.environment().put("PATH", "/usr/local/bin:/usr/bin:/bin:" + home + "/.local/bin");
         }
 
         Process process = pb.start();
