@@ -87,9 +87,9 @@ public class ChatPanel extends JPanel {
 
         // Message initial
         if (!ClaudeSettings.getInstance().isConfigured()) {
-            appendSystemMessage("Bienvenue! Veuillez configurer votre clé API dans Tools > Options > Claude AI");
+            appendSystemMessage("Bienvenue! Veuillez configurer Claude Code dans NetBeans > Préférences > Claude AI");
         } else {
-            appendSystemMessage("Bienvenue! Tapez votre message et appuyez sur Entrée ou Ctrl+Entrée pour envoyer.");
+            appendSystemMessage("Bienvenue! Tapez votre message et appuyez sur Ctrl+Entrée pour envoyer.");
         }
     }
 
@@ -113,7 +113,7 @@ public class ChatPanel extends JPanel {
         }
 
         if (!ClaudeSettings.getInstance().isConfigured()) {
-            appendErrorMessage("Veuillez configurer votre clé API dans Tools > Options > Claude AI");
+            appendErrorMessage("Veuillez configurer Claude Code dans NetBeans > Préférences > Claude AI");
             return;
         }
 

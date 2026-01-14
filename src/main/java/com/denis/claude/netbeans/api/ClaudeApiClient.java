@@ -55,29 +55,11 @@ public class ClaudeApiClient {
                 throw new IllegalStateException("Claude Code non configuré. Vérifiez le chemin dans les paramètres.");
             }
 
-            // Construire le prompt avec l'historique pour simuler une conversation
-            StringBuilder fullPrompt = new StringBuilder();
-
-            if (systemPrompt != null && !systemPrompt.trim().isEmpty()) {
-                fullPrompt.append("[Instructions système: ").append(systemPrompt).append("]\n\n");
-            }
-
-            // Ajouter l'historique de conversation
-            for (Message msg : conversationHistory) {
-                if ("user".equals(msg.role)) {
-                    fullPrompt.append("Utilisateur: ").append(msg.content).append("\n\n");
-                } else {
-                    fullPrompt.append("Assistant: ").append(msg.content).append("\n\n");
-                }
-            }
-
-            // Ajouter le nouveau message
-            fullPrompt.append("Utilisateur: ").append(userMessage);
-
             try {
-                String response = callClaude(fullPrompt.toString());
+                // Envoyer directement le message (Claude Code gère sa propre session)
+                String response = callClaude(userMessage);
 
-                // Ajouter à l'historique
+                // Ajouter à l'historique local pour référence
                 conversationHistory.add(new Message("user", userMessage));
                 conversationHistory.add(new Message("assistant", response));
 
